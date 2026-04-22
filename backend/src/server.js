@@ -28,11 +28,8 @@ app.get("/books", (req, res) => {
 //make app ready for deployment
 // if (ENV.NODE_ENV === "production") {
 //   app.use(express.static(path.join(__dirname, "../frontend/dist")));
+//   };
 
-//   app.get("*", (req, res) => {
-//     res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-//   });
-// }
 
 const startServer = async () => {
   try {
