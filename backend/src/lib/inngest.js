@@ -1,22 +1,33 @@
-import express from "express";
-import path from "path";
-import cors from "cors";
+import { Inngest } from "inngest";
+import { connectDB } from "./db.js";
+import User from "../models/User.js";
 
-import { ENV } from "./lib/env.js";
-import { connectDB } from "./lib/db.js";
+// ✅ THIS LINE WAS MISSING
+export const inngest = new Inngest({ id: "interview-platform" });
 
-const app = express();
+const syncUser = inngest.createFunction(
+  { id: "sync-user" },
+  { event: "clerk/user.created" },
+  async ({ event }) => {
+    await connectDB();
 
-const __dirname = path.resolve();
+    const { id } = event.data;
 
-// middleware
-app.use(express.json());
-app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
+    await User.create({
+      clerkId: id,
+    });
+  }
+);
 
-app.get("/health", (req, res) => {
-  res.status(200).json({ msg: "api is up and running" });
-});
+const deleteUserFromDB = inngest.createFunction(
+  { id: "delete-user-from-db" },
+  { event: "clerk/user.deleted" },
+  async ({ event }) => {
+    await connectDB();
 
-app.get("/books", (req, res) => {
-  res.status(200).json({ msg: "this is the books endpoint" });
-});
+    const { id } = event.data;
+    await User.deleteOne({ clerkId: id });
+  }
+);
+
+export const functions = [syncUser, deleteUserFromDB];
