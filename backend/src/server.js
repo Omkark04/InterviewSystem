@@ -31,22 +31,26 @@ app.get("/books", (req, res) => {
   res.status(200).json({ msg: "books api endpoint" });
 });
 
-// production setup
-if (ENV.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+// production setup                                  //commented out, not required for railway
+// if (ENV.NODE_ENV === "production") {
+//   app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
-    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-  });
-}
+//   app.get("*", (req, res, next) => {
+//     if (req.path.startsWith("/api")) return next();
+//     res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+//   });
+// }
+
+app.use((req, res) => {
+  res.status(404).json({ msg: "Route not found" });
+});
 
 // start server
 const startServer = async () => {
   try {
     await connectDB();
 
-    app.listen(ENV.PORT, () => {
+    app.listen(ENV.PORT || 5000, "0.0.0.0", () => {
       console.log("server is running on port:", ENV.PORT);
     });
   } catch (error) {
