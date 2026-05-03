@@ -1,6 +1,7 @@
 import { Inngest } from "inngest";
 import { connectDB } from "./db.js";
 import User from "../models/User.js";
+import { upsertStreamUser, deleteStreamUser } from "./stream.js";
 
 // create inngest client
 export const inngest = new Inngest({ id: "interview-platform" });
@@ -14,18 +15,26 @@ const syncUser = inngest.createFunction(
 
     const { id, email_addresses, first_name, last_name, image_url } = event.data;
 
+    const userData = {
+      clerkId: id,
+      email: email_addresses?.[0]?.email_address || "",
+      name: `${first_name || ""} ${last_name || ""}`.trim(),
+      profileImage: image_url || "",
+    };
+
     await User.findOneAndUpdate(
       { clerkId: id },
-      {
-        clerkId: id,
-        email: email_addresses?.[0]?.email_address || "",
-        name: `${first_name || ""} ${last_name || ""}`.trim(),
-        profileImage: image_url || "",
-      },
+      userData,
       { upsert: true, new: true }
     );
 
-    console.log("✅ User synced:", id);
+    await upsertStreamUser({
+      id,
+      name: userData.name,
+      image: userData.profileImage,
+    });
+
+    console.log("User synced:", id);
   }
 );
 
@@ -40,7 +49,9 @@ const deleteUserFromDB = inngest.createFunction(
 
     await User.deleteOne({ clerkId: id });
 
-    console.log("🗑️ User deleted:", id);
+    await deleteStreamUser(id);
+
+    console.log("User deleted:", id);
   }
 );
 
