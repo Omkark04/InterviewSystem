@@ -5,7 +5,7 @@ import User from "../models/User.js";
 // create inngest client
 export const inngest = new Inngest({ id: "interview-platform" });
 
-// ✅ CREATE USER
+// CREATE / SYNC USER
 const syncUser = inngest.createFunction(
   { id: "sync-user" },
   { event: "clerk/user.created" },
@@ -14,20 +14,25 @@ const syncUser = inngest.createFunction(
 
     const { id, email_addresses, first_name, last_name, image_url } = event.data;
 
-    await User.create({
-      clerkId: id,
-      email: email_addresses?.[0]?.email_address || "",
-      name: `${first_name || ""} ${last_name || ""}`.trim(),
-      profileImage: image_url || "",
-    });
+    await User.findOneAndUpdate(
+      { clerkId: id },
+      {
+        clerkId: id,
+        email: email_addresses?.[0]?.email_address || "",
+        name: `${first_name || ""} ${last_name || ""}`.trim(),
+        profileImage: image_url || "",
+      },
+      { upsert: true, new: true }
+    );
 
-    console.log("User created");
+    console.log("✅ User synced:", id);
   }
 );
-// ✅ DELETE USER
+
+// DELETE USER
 const deleteUserFromDB = inngest.createFunction(
   { id: "delete-user-from-db" },
-  { event: "user.deleted" },   // ✅ MUST match webhook
+  { event: "clerk/user.deleted" },
   async ({ event }) => {
     await connectDB();
 
@@ -35,7 +40,7 @@ const deleteUserFromDB = inngest.createFunction(
 
     await User.deleteOne({ clerkId: id });
 
-    console.log("User deleted:", id);
+    console.log("🗑️ User deleted:", id);
   }
 );
 
