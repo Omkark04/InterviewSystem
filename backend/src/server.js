@@ -1,38 +1,42 @@
 import express from "express";
-import path from "path";
 import cors from "cors";
 import { serve } from "inngest/express";
+import { clerkMiddleware } from "@clerk/express";
 
 import { ENV } from "./lib/env.js";
 import { connectDB } from "./lib/db.js";
 import { inngest, functions } from "./lib/inngest.js";
 
+import chatRoutes from "./routes/chatRoutes.js";
+
 const app = express();
-const __dirname = path.resolve();
 
 // middleware
 app.use(express.json());
 app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
+app.use(clerkMiddleware());
 
-// test route (optional but useful)
+// test route
 app.get("/", (req, res) => {
   res.send("Backend is running successfully");
 });
 
-// Inngest route (IMPORTANT)
-app.use("/api/inngest", serve({ client: inngest, functions }));
-
-// routes
+// health
 app.get("/health", (req, res) => {
-  res.status(200).json({ msg: "api is up and running" });
+  res.status(200).json({ msg: "API is running" });
 });
 
-app.get("/books", (req, res) => {
-  res.status(200).json({ msg: "books api endpoint" });
-});
+// IMPORTANT: Inngest
+app.use(
+  "/api/inngest",
+  serve({
+    client: inngest,
+    functions,
+  })
+);
 
-// production setup
-
+// Chat routes
+app.use("/api/chat", chatRoutes);
 
 // start server
 const startServer = async () => {
@@ -40,7 +44,7 @@ const startServer = async () => {
     await connectDB();
 
     app.listen(ENV.PORT, () => {
-      console.log("server is running on port:", ENV.PORT);
+      console.log(`Server running on port ${ENV.PORT}`);
     });
   } catch (error) {
     console.error("Failed to start server:", error.message);

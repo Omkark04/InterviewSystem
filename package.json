@@ -17,5 +17,8 @@
   "bugs": {
     "url": "https://github.com/Omkark04/InterviewSystem/issues"
   },
-  "homepage": "https://github.com/Omkark04/InterviewSystem#readme"
+  "homepage": "https://github.com/Omkark04/InterviewSystem#readme",
+  "dependencies": {
+    "@clerk/express": "^2.1.12"
+  }
 }

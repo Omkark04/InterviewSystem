@@ -2,24 +2,28 @@ import { StreamChat } from "stream-chat";
 import { ENV } from "./env.js";
 
 const apiKey = ENV.STREAM_API_KEY;
-const apiSecret = ENV.STREAM_API_SECRET;
+const apiSecret = ENV.STREAM_SECRET_KEY;
 
 if (!apiKey || !apiSecret) {
-  throw new Error("STREAM_API_KEY or STREAM_API_SECRET is missing");
+  console.error("STREAM_API_KEY or STREAM_SECRET_KEY is missing");
+  process.exit(1);
 }
 
-// Stream client
+// Stream Chat client
 export const chatClient = StreamChat.getInstance(apiKey, apiSecret);
 
 // Create / Update Stream user
 export const upsertStreamUser = async (userData) => {
   try {
     await chatClient.upsertUsers([userData]);
-    console.log(" Stream user upserted:", userData.id);
+
+    console.log("✅ Stream user upserted:", userData.id);
+
     return userData;
   } catch (error) {
-    console.error("Error upserting Stream user:", error.message);
-    throw error;
+    console.error("❌ Error upserting Stream user:", error.message);
+
+    return null;
   }
 };
 
@@ -30,10 +34,12 @@ export const deleteStreamUser = async (userId) => {
       hard_delete: true,
     });
 
-    console.log(" Stream user deleted:", userId);
+    console.log("🗑️ Stream user deleted:", userId);
+
     return true;
   } catch (error) {
-    console.error("Error deleting Stream user:", error.message);
-    throw error;
+    console.error("❌ Error deleting Stream user:", error.message);
+
+    return false;
   }
 };

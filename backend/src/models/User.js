@@ -6,27 +6,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
     email: {
       type: String,
       required: true,
       unique: true,
     },
-
     profileImage: {
       type: String,
       default: "",
     },
-
     clerkId: {
       type: String,
       required: true,
       unique: true,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true } // createdAt, updatedAt
 );
 
 const User = mongoose.model("User", userSchema);
