@@ -1,4 +1,5 @@
 import { StreamChat } from "stream-chat";
+import { StreamClient } from "@stream-io/node-sdk";  //antigravity
 import { ENV } from "./env.js";
 
 const apiKey = ENV.STREAM_API_KEY;
@@ -11,6 +12,9 @@ if (!apiKey || !apiSecret) {
 
 // Stream Chat client
 export const chatClient = StreamChat.getInstance(apiKey, apiSecret);
+
+// Stream Video client
+export const streamClient = new StreamClient(apiKey, apiSecret);  //antigravity
 
 // Create / Update Stream user
 export const upsertStreamUser = async (userData) => {

@@ -8,6 +8,9 @@ import { connectDB } from "./lib/db.js";
 import { inngest, functions } from "./lib/inngest.js";
 
 import chatRoutes from "./routes/chatRoutes.js";
+import sessionRoutes from "./routes/sessionRoutes.js";   //antigravity session
+import { runCode } from "./lib/codeRunner.js";
+
 
 const app = express();
 
@@ -38,6 +41,21 @@ app.use(
 // Chat routes
 app.use("/api/chat", chatRoutes);
 
+// Session routes
+app.use("/api/sessions", sessionRoutes);  //antigravity
+
+// Local code execution - no external API needed
+app.post("/api/execute", async (req, res) => {
+  try {
+    const { language, files } = req.body;
+    const code = files?.[0]?.content || "";
+    const result = await runCode(language, code);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: "Code execution failed", error: error.message });
+  }
+});
+
 // start server
 const startServer = async () => {
   try {
@@ -51,5 +69,7 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+
 
 startServer();
