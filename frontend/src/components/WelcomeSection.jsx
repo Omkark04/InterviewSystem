@@ -1,8 +1,9 @@
 import { useUser } from "@clerk/clerk-react";
-import { ArrowRightIcon, SparklesIcon, ZapIcon } from "lucide-react";
+import { ArrowRightIcon, LinkIcon, SparklesIcon, ZapIcon } from "lucide-react";
 
 function WelcomeSection({ onCreateSession }) {
   const { user } = useUser();
+  const isInterviewer = user?.publicMetadata?.role === "interviewer";
 
   return (
     <div className="relative overflow-hidden">
@@ -18,23 +19,31 @@ function WelcomeSection({ onCreateSession }) {
               </h1>
             </div>
             <p className="text-xl text-base-content/60 ml-16">
-              Ready to level up your coding skills?
+              {isInterviewer ? "Ready to conduct your next interview?" : "Ready for your interview session?"}
             </p>
           </div>
-          <button
-            onClick={onCreateSession}
-            className="group px-8 py-4 bg-gradient-to-r from-primary to-secondary rounded-2xl transition-all duration-200 hover:opacity-90"
-          >
-            <div className="flex items-center gap-3 text-white font-bold text-lg">
-              <ZapIcon className="w-6 h-6" />
-              <span>Create Session</span>
-              <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+
+          {isInterviewer ? (
+            <button
+              onClick={onCreateSession}
+              className="group px-8 py-4 bg-gradient-to-r from-primary to-secondary rounded-2xl transition-all duration-200 hover:opacity-90"
+            >
+              <div className="flex items-center gap-3 text-white font-bold text-lg">
+                <ZapIcon className="w-6 h-6" />
+                <span>Create Session</span>
+                <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 text-base-content/50 text-sm">
+              <LinkIcon className="w-4 h-4" />
+              <span>Join a session via invite link from your interviewer</span>
             </div>
-          </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-export default WelcomeSection;
+export default WelcomeSection;

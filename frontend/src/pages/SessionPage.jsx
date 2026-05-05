@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useEndSession, useJoinSession, useSessionById } from "../hooks/useSessions";
 import { PROBLEMS } from "../data/problems";
@@ -7,13 +7,14 @@ import { executeCode } from "../lib/piston";
 import Navbar from "../components/Navbar";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { getDifficultyBadgeClass } from "../lib/utils";
-import { Loader2Icon, LogOutIcon, PhoneOffIcon } from "lucide-react";
+import { Loader2Icon, LinkIcon, LogOutIcon, PhoneOffIcon } from "lucide-react";
 import CodeEditorPanel from "../components/CodeEditorPanel";
 import OutputPanel from "../components/OutputPanel";
 
 import useStreamClient from "../hooks/useStreamClient";
 import { StreamCall, StreamVideo } from "@stream-io/video-react-sdk";
 import VideoCallUI from "../components/VideoCallUI";
+import toast from "react-hot-toast";
 
 function SessionPage() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ function SessionPage() {
   const { user } = useUser();
   const [output, setOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+  const isRemoteUpdate = useRef(false); // prevents send-receive loop
 
   const { data: sessionData, isLoading: loadingSession, refetch } = useSessionById(id);
 
@@ -38,13 +40,15 @@ function SessionPage() {
     isParticipant
   );
 
-  // find the problem data based on session problem title
-  const problemData = session?.problem
-    ? Object.values(PROBLEMS).find((p) => p.title === session.problem)
+  // problem selection is now done inside the session (decoupled from session title)
+  const problems = Object.values(PROBLEMS);
+  const [selectedProblemTitle, setSelectedProblemTitle] = useState("");
+  const problemData = selectedProblemTitle
+    ? problems.find((p) => p.title === selectedProblemTitle)
     : null;
 
   const [selectedLanguage, setSelectedLanguage] = useState("javascript");
-  const [code, setCode] = useState(problemData?.starterCode?.[selectedLanguage] || "");
+  const [code, setCode] = useState("");
 
   // auto-join session if user is not already a participant and not the host
   useEffect(() => {
@@ -73,11 +77,49 @@ function SessionPage() {
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
     setSelectedLanguage(newLang);
-    // use problem-specific starter code
-    const starterCode = problemData?.starterCode?.[newLang] || "";
-    setCode(starterCode);
+    setCode(problemData?.starterCode?.[newLang] || "");
     setOutput(null);
   };
+
+  const handleProblemChange = (e) => {
+    const title = e.target.value;
+    setSelectedProblemTitle(title);
+    const p = problems.find((prob) => prob.title === title);
+    setCode(p?.starterCode?.[selectedLanguage] || "");
+    setOutput(null);
+  };
+
+  // --- CODE SYNC: send code/language/problem to other participant (debounced) ---
+  useEffect(() => {
+    if (!channel) return;
+    if (isRemoteUpdate.current) {
+      isRemoteUpdate.current = false;
+      return;
+    }
+    const timeout = setTimeout(() => {
+      channel.sendEvent({
+        type: "code_sync",
+        code,
+        language: selectedLanguage,
+        problem: selectedProblemTitle,
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [code, selectedLanguage, selectedProblemTitle, channel]);
+
+  // --- CODE SYNC: receive updates from other participant ---
+  useEffect(() => {
+    if (!channel) return;
+    const handler = (event) => {
+      if (event.user?.id === user?.id) return; // ignore own echoes
+      isRemoteUpdate.current = true;
+      if (event.code !== undefined) setCode(event.code);
+      if (event.language) setSelectedLanguage(event.language);
+      if (event.problem !== undefined) setSelectedProblemTitle(event.problem);
+    };
+    channel.on("code_sync", handler);
+    return () => channel.off("code_sync", handler);
+  }, [channel, user?.id]);
 
   const handleRunCode = async () => {
     setIsRunning(true);
@@ -86,6 +128,27 @@ function SessionPage() {
     const result = await executeCode(selectedLanguage, code);
     setOutput(result);
     setIsRunning(false);
+
+    // Broadcast output to other participant
+    if (channel) {
+      channel.sendEvent({ type: "output_sync", output: result }).catch(() => {});
+    }
+  };
+
+  // --- OUTPUT SYNC: receive run output from other participant ---
+  useEffect(() => {
+    if (!channel) return;
+    const handler = (event) => {
+      if (event.user?.id === user?.id) return;
+      if (event.output !== undefined) setOutput(event.output);
+    };
+    channel.on("output_sync", handler);
+    return () => channel.off("output_sync", handler);
+  }, [channel, user?.id]);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success("Session link copied! Share it with your candidate.");
   };
 
   const handleEndSession = () => {
@@ -110,28 +173,47 @@ function SessionPage() {
                   {/* HEADER SECTION */}
                   <div className="p-6 bg-base-100 border-b border-base-300">
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h1 className="text-3xl font-bold text-base-content">
+                      <div className="flex-1">
+                        <h1 className="text-2xl font-bold text-base-content">
                           {session?.problem || "Loading..."}
                         </h1>
-                        {problemData?.category && (
-                          <p className="text-base-content/60 mt-1">{problemData.category}</p>
-                        )}
-                        <p className="text-base-content/60 mt-2">
+                        <p className="text-base-content/60 mt-1 text-sm">
                           Host: {session?.host?.name || "Loading..."} •{" "}
                           {session?.participant ? 2 : 1}/2 participants
                         </p>
+
+                        {/* PROBLEM SELECTOR */}
+                        <div className="mt-3">
+                          <select
+                            className="select select-bordered select-sm w-full max-w-xs"
+                            value={selectedProblemTitle}
+                            onChange={handleProblemChange}
+                          >
+                            <option value="">— Pick a coding problem —</option>
+                            {problems.map((p) => (
+                              <option key={p.id} value={p.title}>
+                                {p.title} ({p.difficulty})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`badge badge-lg ${getDifficultyBadgeClass(
-                            session?.difficulty
-                          )}`}
-                        >
-                          {session?.difficulty.slice(0, 1).toUpperCase() +
-                            session?.difficulty.slice(1) || "Easy"}
-                        </span>
+                      <div className="flex items-center gap-3 ml-4">
+                        {problemData?.category && (
+                          <span className="badge badge-outline text-xs">{problemData.category}</span>
+                        )}
+                        {/* Copy invite link — visible to host when session is active */}
+                        {isHost && session?.status === "active" && (
+                          <button
+                            onClick={handleCopyLink}
+                            className="btn btn-outline btn-sm gap-2"
+                            title="Copy session link to share with candidate"
+                          >
+                            <LinkIcon className="w-4 h-4" />
+                            Copy Invite Link
+                          </button>
+                        )}
                         {isHost && session?.status === "active" && (
                           <button
                             onClick={handleEndSession}
@@ -152,6 +234,7 @@ function SessionPage() {
                       </div>
                     </div>
                   </div>
+
 
                   <div className="p-6 space-y-6">
                     {/* problem desc */}
@@ -232,6 +315,13 @@ function SessionPage() {
               <Panel defaultSize={50} minSize={20}>
                 <PanelGroup direction="vertical">
                   <Panel defaultSize={70} minSize={30}>
+                    {/* Live sync indicator */}
+                    {channel && (
+                      <div className="flex items-center gap-2 px-4 py-1.5 bg-success/10 border-b border-success/20 text-xs text-success font-medium">
+                        <span className="w-2 h-2 rounded-full bg-success animate-pulse inline-block" />
+                        Live Sync — code & output are shared in real-time
+                      </div>
+                    )}
                     <CodeEditorPanel
                       selectedLanguage={selectedLanguage}
                       code={code}

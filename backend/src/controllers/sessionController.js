@@ -3,31 +3,28 @@ import Session from "../models/Session.js";
 
 export async function createSession(req, res) {
   try {
-    const { problem, difficulty } = req.body;
+    const { title } = req.body;
     const userId = req.user._id;
     const clerkId = req.user.clerkId;
 
-    if (!problem || !difficulty) {
-      return res.status(400).json({ message: "Problem and difficulty are required" });
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: "Session title is required" });
     }
 
-    // generate a unique call id for stream video
     const callId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    // create session in db
-    const session = await Session.create({ problem, difficulty, host: userId, callId });
+    // store title in the 'problem' field (reusing existing schema field)
+    const session = await Session.create({ problem: title.trim(), difficulty: "medium", host: userId, callId });
 
-    // create stream video call
     await streamClient.video.call("default", callId).getOrCreate({
       data: {
         created_by_id: clerkId,
-        custom: { problem, difficulty, sessionId: session._id.toString() },
+        custom: { title: title.trim(), sessionId: session._id.toString() },
       },
     });
 
-    // chat messaging
     const channel = chatClient.channel("messaging", callId, {
-      name: `${problem} Session`,
+      name: `${title.trim()} Session`,
       created_by_id: clerkId,
       members: [clerkId],
     });
@@ -40,6 +37,7 @@ export async function createSession(req, res) {
     res.status(500).json({ message: "Internal Server Error" });
   }
 }
+
 
 export async function getActiveSessions(_, res) {
   try {
